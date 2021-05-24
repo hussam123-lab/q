@@ -5,8 +5,8 @@
 set AUDIODEV=hw:1
 
 DECODER=wsprcan/k9an-wsprd
-IQFILE=blah.wav
-AUDIOFILE=audio.wav
+IQFILE="iq.wav"
+AUDIOFILE="audio.wav"
 
 ./si5351
 
