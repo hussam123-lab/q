@@ -7,16 +7,14 @@
 #include <string.h>
 #include <stdint.h>
 #include <time.h>
-#include <fftw3.h>
+#include "fftw3.h"
 
 #include "fano.h"
 #include "jelinek.h"
 #include "nhash.h"
 #include "wsprd_utils.h"
 #include "wsprsim_utils.h"
-#include <pulse/simple.h>
-#include <pulse/error.h>
-#include <pulse/gccmacro.h>
+
 
 #define max(x,y) ((x) > (y) ? (x) : (y))
 // Possible PATIENCE options: FFTW_ESTIMATE, FFTW_ESTIMATE_PATIENT,
@@ -38,8 +36,7 @@ unsigned char pr3[162]=
 unsigned long nr;
 
 int printdata=0;
-pa_simple *s;
-pa_sample_spec xss;
+
 //***************************************************************************
 unsigned long readc2file(char *ptr_to_infile, double *idat, double *qdat,
                          double *freq, int *wspr_type)
@@ -89,13 +86,6 @@ unsigned long readwavfile(char *ptr_to_infile, int ntrmin, double *idat, double 
     int i0;
     double df;
 
-static const pa_sample_spec xss = {
-	.format = PA_SAMPLE_S16LE,
-	.rate = 12000,
-	.channels = 1};
-pa_simple *s = NULL;
-int ret = 1;
-int error;
 nfft2 = 46080;
     nh2=nfft2/2;
     
@@ -124,14 +114,15 @@ nfft2 = 46080;
         return 1;
     }
     
-if (!(s = pa_simple_new(NULL, "wspr", PA_STREAM_RECORD, NULL, "record", &xss, NULL, NULL, &error))) {
-        fprintf(stderr, __FILE__": pa_simple_new() failed: %s\n", pa_strerror(error));
-    }
+fp = fopen(ptr_to_infile,"rb");
+    if (fp == NULL) {
+	            fprintf(stderr, "Cannot open data file '%s'\n", ptr_to_infile);
+		            return 1;
+			        }
+        nr=fread(buf2,2,22,fp);            //Read and ignore header
+	    nr=fread(buf2,2,npoints,fp);       //Read raw data
 
-    if (pa_simple_read(s, buf2, npoints * 2, &error) < 0) {
-        fprintf(stderr, __FILE__": pa_simple_read() failed: %s\n", pa_strerror(error));
-        }
-    
+	        fclose(fp);
     nr = npoints;
     if(nr!=npoints){
 		printf("Failed to read data file\n");
@@ -581,7 +572,7 @@ int main(int argc, char *argv[])
     signed char message[]={-9,13,-35,123,57,-39,64,0,0,0,0};
     char *callsign, *call_loc_pow;
     char *ptr_to_infile_suffix;
-    char *ptr_to_infile = NULL;
+    char *ptr_to_infile;
     char *data_dir=NULL;
     char wisdom_fname[200],all_fname[200],spots_fname[200];
     char timer_fname[200],hash_fname[200];
@@ -720,7 +711,8 @@ int main(int argc, char *argv[])
     }
     
     if( optind+1 > argc) {
-        ptr_to_infile = NULL;
+        usage();
+	return 1;
         
     } else {
         ptr_to_infile=argv[optind];
@@ -768,8 +760,8 @@ int main(int argc, char *argv[])
     }
     ftimer=fopen(timer_fname,"w");
     
-    if(ptr_to_infile == NULL||strstr(ptr_to_infile,".wav") ) {
-        //ptr_to_infile_suffix=strstr(ptr_to_infile,".wav");
+    if(strstr(ptr_to_infile,".wav") ) {
+        ptr_to_infile_suffix=strstr(ptr_to_infile,".wav");
         
         t0 = clock();
         npoints=readwavfile(ptr_to_infile, wspr_type, idat, qdat);
@@ -793,10 +785,10 @@ int main(int argc, char *argv[])
     }
     
     // Parse date and time from given filename
-   // strncpy(date,ptr_to_infile_suffix-11,6);
-   // strncpy(uttime,ptr_to_infile_suffix-4,4);
-   // date[6]='\0';
-   // uttime[4]='\0';
+    strncpy(date,ptr_to_infile_suffix-11,6);
+    strncpy(uttime,ptr_to_infile_suffix-4,4);
+    date[6]='\0';
+    uttime[4]='\0';
 
     // Do windowed ffts over 2 symbols, stepped by half symbols
     int nffts=4*floor(npoints/512)-1;
@@ -1251,7 +1243,7 @@ int main(int argc, char *argv[])
         }
     }
     
-    for (i=0; i<3; i++) {
+    for (i=0; i<uniques; i++) {
         printf("%4s %3.0f %4.1f %10.6f %2d  %-s \n",
                decodes[i].time, decodes[i].snr,decodes[i].dt, decodes[i].freq,
                (int)decodes[i].dt, decodes[i].message);
